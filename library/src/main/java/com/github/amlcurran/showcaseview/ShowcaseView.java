@@ -69,6 +69,7 @@ public class ShowcaseView extends RelativeLayout
     private boolean hasNoTarget = false;
     private boolean shouldCentreText;
     private Bitmap bitmapBuffer;
+    private float bitmapScale = 1.0f;
 
     // Animation items
     private long fadeInMillis;
@@ -155,12 +156,10 @@ public class ShowcaseView extends RelativeLayout
     }
 
     public void setShowcase(final Target target, final boolean animate) {
-        postDelayed(new Runnable() {
-            @Override
-            public void run() {
-
-                if (!shotStateStore.hasShot()) {
-
+        if (!shotStateStore.hasShot()) {
+            postDelayed(new Runnable() {
+                @Override
+                public void run() {
                     updateBitmap();
                     Point targetPoint = target.getPoint();
                     if (targetPoint != null) {
@@ -174,18 +173,32 @@ public class ShowcaseView extends RelativeLayout
                         hasNoTarget = true;
                         invalidate();
                     }
-
                 }
-            }
-        }, 100);
+            }, 100);
+        }
     }
 
     private void updateBitmap() {
         if (bitmapBuffer == null || haveBoundsChanged()) {
-            if(bitmapBuffer != null)
-        		bitmapBuffer.recycle();
-            bitmapBuffer = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+            if(bitmapBuffer != null && !bitmapBuffer.isRecycled()) {
+                bitmapBuffer.recycle();
+            }
+            bitmapBuffer = null;
 
+            int w = getMeasuredWidth();
+            int h = getMeasuredHeight();
+            boolean isValidSize = (w > 0 && h > 0);
+            float low = 1.0f / 16.0f - .001f;
+            bitmapScale = 1.0f;
+
+            while (bitmapBuffer == null && bitmapScale >= low && isValidSize) {
+                try {
+                    bitmapBuffer = Bitmap.createBitmap((int) (w * bitmapScale), (int) (h * bitmapScale), Bitmap.Config.ARGB_8888);
+                } catch (OutOfMemoryError e) {}
+                if (bitmapBuffer == null) {
+                    bitmapScale /= 2.0f;
+                }
+            }
         }
     }
 
@@ -256,7 +269,7 @@ public class ShowcaseView extends RelativeLayout
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
-        if (showcaseX < 0 || showcaseY < 0 || shotStateStore.hasShot()) {
+        if (showcaseX < 0 || showcaseY < 0 || shotStateStore.hasShot() || bitmapBuffer == null) {
             super.dispatchDraw(canvas);
             return;
         }
@@ -266,8 +279,12 @@ public class ShowcaseView extends RelativeLayout
 
         // Draw the showcase drawable
         if (!hasNoTarget) {
-            showcaseDrawer.drawShowcase(bitmapBuffer, showcaseX, showcaseY, scaleMultiplier);
+            showcaseDrawer.drawShowcase(bitmapBuffer, showcaseX, showcaseY, scaleMultiplier * bitmapScale);
+
+            canvas.save();
+            canvas.scale(1.0f / bitmapScale, 1.0f / bitmapScale);
             showcaseDrawer.drawToCanvas(canvas, bitmapBuffer);
+            canvas.restore();
         }
 
         // Draw the text on the screen, recalculating its position if necessary
@@ -293,8 +310,8 @@ public class ShowcaseView extends RelativeLayout
     private void clearBitmap() {
         if (bitmapBuffer != null && !bitmapBuffer.isRecycled()) {
             bitmapBuffer.recycle();
-            bitmapBuffer = null;
         }
+        bitmapBuffer = null;
     }
 
     private void fadeOutShowcase() {

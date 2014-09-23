@@ -186,6 +186,12 @@ class TextDrawer {
 	    	}
     	}
 
+        // I'm not 100% where the error is above.  But DynamicLayout crashes if the
+        // width is negative.
+        if (mBestTextPosition[2] < 0) {
+            mBestTextPosition[2] = 0;
+        }
+
         hasRecalculated = true;
     }
 
